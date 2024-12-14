@@ -15,7 +15,7 @@ from openpyxl.drawing.image import Image
 from openpyxl.styles import PatternFill
 
 
-API_KEY = "AIzaSyA27hbQSvUhbU80GKf607Atnb0mk0dCCT4"
+API_KEY = "AIzaSyD_NcigzVQdRDH5EZcaK7bdrw01hDXfrFw"
 file_path = 'output.xlsx'
 excel_pattern = 'pattern.xlsx'
 
