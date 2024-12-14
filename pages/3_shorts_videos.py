@@ -1,5 +1,8 @@
 import streamlit as st
 
+st.set_page_config(
+    page_title="АНАЛИТИКА YouTube"
+)
 st.page_link("main.py", label="На главную", icon="⬅️")
 st.title("АНАЛИТИКА—ХУИТИКА | Вертикальные видео")
 st.write("Не ну тут пока что ничего нет")

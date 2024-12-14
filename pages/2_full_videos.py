@@ -7,13 +7,13 @@ import requests
 
 import pandas as pd
 import io
+from main import vote, clear_folder
 
 from colorstyle import color_style
 
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image
 from openpyxl.styles import PatternFill
-
 
 API_KEY = "AIzaSyD_NcigzVQdRDH5EZcaK7bdrw01hDXfrFw"
 file_path = 'output.xlsx'
@@ -32,7 +32,6 @@ def get_channel_subs_count(channel_id):
 
 # Функция для добавления новой строки в Excel файл
 def append_to_excel(file_path, data):
-
     if os.path.isfile(file_path) is False:
         # Загружаем оригинальный файл
         wb = load_workbook(excel_pattern)
@@ -118,10 +117,32 @@ def get_video_info(video_id):
     append_to_excel(file_path, videos_data)
 
 
-def main():
-    st.page_link("main.py", label="На главную", icon="⬅️")
-    st.title("АНАЛИТИКА—ХУИТИКА | Полноформатные видео")
+def create_btn():
+    if os.path.isfile(file_path):
+        # st.warning("Внимание! У вас уже имеется Excel таблица!\n"
+        #           "Новые видео будут добавляться в уже существующую таблицу!\n"
+        #           "Вы можете продолжить, либо удалить старую таблицу.")
 
+        btn1, btn2 = st.columns(2)
+
+        if btn2.button("Удалить таблицу"):
+            vote()
+
+        # Добавляем кнопку для скачивания Excel файла
+        with open(file_path, 'rb') as f:
+            download_data = f.read()
+
+        if btn1.download_button(
+                label="Скачать Excel файл",
+                data=download_data,
+                file_name=os.path.basename(file_path),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ):
+            st.balloons()
+
+
+def main():
+    create_btn()
     yt_link = st.text_input("Ссылка на ютуб ролик")
 
     correct_link = str(yt_link.split('=')[-1])
@@ -140,4 +161,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    st.set_page_config(
+        page_title="АНАЛИТИКА YouTube | Полноформатные видео"
+    )
+
+    st.page_link("main.py", label="На главную", icon="⬅️")
+    st.title("АНАЛИТИКА—ХУИТИКА")
+
+    user_input = st.sidebar.text_input("Пароль", type="password")
+    if user_input == "pipiska":
+        main()
+    else:
+        st.error("Ошибка авторизации. Пожалуйста, проверьте введенные данные.")

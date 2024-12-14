@@ -5,11 +5,39 @@ import os
 
 file_path = 'output.xlsx'
 
-st.title("АНАЛИТИКА—ХУИТИКА")
+st.set_page_config(
+    page_title="АНАЛИТИКА YouTube"
+)
 
-col1, col2 = st.columns(2)
-col1.page_link("pages/2_full_videos.py", label="Полноформатные видео", icon="🎬")
-col2.page_link("pages/3_shorts_videos.py", label="Вертикальные видео", icon="🩳")
+
+def main():
+    st.title("АНАЛИТИКА—ХУИТИКА")
+
+    col1, col2 = st.columns(2)
+    col1.page_link("pages/2_full_videos.py", label="Полноформатные видео", icon="🎬")
+    col2.page_link("pages/3_shorts_videos.py", label="Вертикальные видео", icon="🩳")
+
+    if os.path.isfile(file_path):
+        st.warning("Внимание! У вас уже имеется Excel таблица!\n"
+                   "Новые видео будут добавляться в уже существующую таблицу!\n"
+                   "Вы можете продолжить, либо удалить старую таблицу.")
+
+        btn1, btn2 = st.columns(2)
+
+        if btn2.button("Удалить таблицу"):
+            vote()
+
+        # Добавляем кнопку для скачивания Excel файла
+        with open(file_path, 'rb') as f:
+            download_data = f.read()
+
+        if btn1.download_button(
+            label="Скачать Excel файл",
+            data=download_data,
+            file_name=os.path.basename(file_path),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ):
+            st.balloons()
 
 
 def clear_folder(folder_path):
@@ -30,23 +58,5 @@ def vote():
         st.rerun()
 
 
-if os.path.isfile(file_path):
-    st.warning("Внимание! У вас уже имеется Excel таблица!\n"
-               "Новые видео будут добавляться в уже существующую таблицу!\n"
-               "Вы можете продолжить, либо удалить старую таблицу.")
-
-    btn1, btn2 = st.columns(2)
-
-    if btn2.button("Удалить таблицу"):
-        vote()
-
-    # Добавляем кнопку для скачивания Excel файла
-    with open(file_path, 'rb') as f:
-        download_data = f.read()
-
-    btn1.download_button(
-        label="Скачать Excel файл",
-        data=download_data,
-        file_name=os.path.basename(file_path),
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+if __name__ == "__main__":
+    main()
