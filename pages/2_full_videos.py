@@ -1,4 +1,5 @@
 import os
+import re
 
 from googleapiclient.discovery import build
 
@@ -118,13 +119,27 @@ def get_video_info(video_id):
     append_to_excel(file_path, videos_data)
 
 
+def get_youtube_id(url):
+    # Паттерн для поиска ID видео
+    pattern = r"(?:youtu\.be\/|(?:www\.)?youtube\.com\/(?:watch\?v=|embed\/|v\/|.+\?v=))([^&]{11})"
+    match = re.search(pattern, url)
+
+    if match:
+        return match.group(1)
+    else:
+        return None
+
+
 def main():
     st.page_link("main.py", label="На главную", icon="⬅️")
     st.title("АНАЛИТИКА—ХУИТИКА | Полноформатные видео")
 
     yt_link = st.text_input("Ссылка на ютуб ролик")
 
-    correct_link = str(yt_link.split('=')[-1])
+    #  correct_link = str(yt_link.split('=')[-1])
+    correct_link = ""
+    if yt_link != "":
+        correct_link = get_youtube_id(yt_link)
 
     try:
         get_video_info(correct_link)
