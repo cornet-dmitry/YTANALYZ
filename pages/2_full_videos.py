@@ -4,6 +4,7 @@ import re
 from googleapiclient.discovery import build
 from googletrans import Translator
 import requests
+import config
 
 import streamlit as st
 
@@ -13,12 +14,14 @@ import pandas as pd
 from colorstyle import color_style
 
 from openpyxl import load_workbook
-from openpyxl.drawing.image import Image
+from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
 from openpyxl.styles import PatternFill
+from openpyxl.drawing.image import Image
+from openpyxl.utils import get_column_letter
 
 
-API_KEY = "AIzaSyD_NcigzVQdRDH5EZcaK7bdrw01hDXfrFw"
-file_path = 'output.xlsx'
+API_KEY = config.API
+file_path = config.file_path
 excel_pattern = 'pattern.xlsx'
 
 translator = Translator()
@@ -55,23 +58,35 @@ def append_to_excel(file_path, data):
     target_row = max_rows + 1
     cell_value_id = sheet.cell(row=max_rows, column=1).value
 
+    # Установка высоты строки
     sheet.row_dimensions[target_row].height = 135
 
-    sheet.cell(row=max_rows + 1, column=1, value=int(cell_value_id) + 1)
-    sheet.cell(row=max_rows + 1, column=2, value=data[0])
-    sheet.cell(row=max_rows + 1, column=3, value=data[1])
+    # Заполнение данных
+    sheet.cell(row=target_row, column=1, value=int(cell_value_id) + 1)
+    sheet.cell(row=target_row, column=2, value=data[0])
+    sheet.cell(row=target_row, column=3, value=data[1])
 
-    # Вставьте изображение
+    # Добавление изображения в ячейку
     img = Image(data[2])
-    img.anchor = f"D{target_row}"  # Установите анкор изображения в D и соответствующую строку
+    img_width, img_height = img.width, img.height  # Получаем размеры изображения
+
+    # Установка размера ячейки под изображение
+    target_col = 4  # Колонка D
+    col_letter = get_column_letter(target_col)
+    cell_width = img_width / 7  # Excel считает ширину в "знаках", приблизительно 7px = 1 знак
+    sheet.column_dimensions[col_letter].width = cell_width
+
+    img.anchor = f"D{target_row}"  # Указываем точный анкор
     sheet.add_image(img)
 
-    sheet.cell(row=max_rows + 1, column=5, value=data[3])
-    sheet.cell(row=max_rows + 1, column=6, value=data[4])
-    sheet.cell(row=max_rows + 1, column=7, value=data[5])
-    sheet.cell(row=max_rows + 1, column=8, value=data[6])
+    # Остальные данные
+    sheet.cell(row=target_row, column=5, value=data[3])
+    sheet.cell(row=target_row, column=6, value=data[4])
+    sheet.cell(row=target_row, column=7, value=data[5])
+    sheet.cell(row=target_row, column=8, value=data[6])
 
-    sheet.cell(row=max_rows + 1, column=9, value=data[7])
+    # Настройка заливки ячейки
+    sheet.cell(row=target_row, column=9, value=data[7])
     sheet[f'I{target_row}'].fill = PatternFill(
         start_color=color_style[data[7].split('-')[0]],
         end_color=color_style[data[7].split('-')[0]],
@@ -107,9 +122,21 @@ def load_table_info(file_path):
 
     # Выводим таблицу в Streamlit
     st.write("### Таблица аналитики")
+
+    # Добавляем заголовки колонок
+    headers = st.columns([1, 3, 3, 2])
+    with headers[0]:
+        st.write("**Номер**")
+    with headers[1]:
+        st.write("**Название**")
+    with headers[2]:
+        st.write("**Ссылка**")
+    with headers[3]:
+        st.write("**Просмотры/Подписчики**")
+
     for index, row in df.iterrows():
         # Создаём строку с колонками
-        cols = st.columns([1, 3, 3, 2, 1])
+        cols = st.columns([1, 3, 3, 2])
 
         with cols[0]:
             st.write(row["Номер"])  # Автоматически пронумерованная строка
@@ -127,32 +154,6 @@ def load_table_info(file_path):
         with cols[3]:
             st.write(row["Просмотры/Подписчики"] if row["Просмотры/Подписчики"] else "Нет данных")
 
-        with cols[4]:
-            # Кнопка для удаления строки
-            if st.button(f"Удалить {row['Номер']}", key=f"delete_{row['Номер']}"):
-                try:
-                    delete_row(file_path, index + 2)
-                    st.query_params.clear()  # Очищаем параметры URL
-                    st.rerun()
-                except PermissionError:
-                    vote()
-
-
-# Функция для удаления строки из Excel
-def delete_row(file_path, row_number):
-    workbook = load_workbook(file_path)
-    sheet = workbook.active
-    # Удаляем строку
-    sheet.delete_rows(row_number)
-    # Сохраняем изменения
-    workbook.save(file_path)
-
-
-@st.dialog("Возникла ошибка")
-def vote():
-    st.write("Возможно, у вас открыл Excel файл. Закройте его и повторите попытку")
-    if st.button("Ок"):
-        st.rerun()
 
 
 def get_video_info(video_id):
