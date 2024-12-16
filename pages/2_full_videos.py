@@ -2,12 +2,13 @@ import os
 import re
 
 from googleapiclient.discovery import build
-
-import streamlit as st
+from googletrans import Translator
 import requests
 
+import streamlit as st
+
+from PIL import Image as PILImage
 import pandas as pd
-import io
 
 from colorstyle import color_style
 
@@ -19,6 +20,8 @@ from openpyxl.styles import PatternFill
 API_KEY = "AIzaSyD_NcigzVQdRDH5EZcaK7bdrw01hDXfrFw"
 file_path = 'output.xlsx'
 excel_pattern = 'pattern.xlsx'
+
+translator = Translator()
 
 
 def get_service():
@@ -33,8 +36,7 @@ def get_channel_subs_count(channel_id):
 
 # Функция для добавления новой строки в Excel файл
 def append_to_excel(file_path, data):
-
-    if os.path.isfile(file_path) is False:
+    if not os.path.isfile(file_path):
         # Загружаем оригинальный файл
         wb = load_workbook(excel_pattern)
         # Сохраняем его под новым именем
@@ -42,6 +44,12 @@ def append_to_excel(file_path, data):
 
     workbook = load_workbook(file_path)
     sheet = workbook.active
+
+    # Проверяем, есть ли видео с таким URL
+    video_urls = [sheet.cell(row=i, column=2).value for i in range(2, sheet.max_row + 1)]
+    if data[0] in video_urls:
+        st.warning("Видео с таким URL уже существует в таблице!")
+        return
 
     max_rows = sheet.max_row
     target_row = max_rows + 1
@@ -55,8 +63,7 @@ def append_to_excel(file_path, data):
 
     # Вставьте изображение
     img = Image(data[2])
-    # Установите анкор изображения в D и соответствующую строку
-    img.anchor = f"D{target_row}"
+    img.anchor = f"D{target_row}"  # Установите анкор изображения в D и соответствующую строку
     sheet.add_image(img)
 
     sheet.cell(row=max_rows + 1, column=5, value=data[3])
@@ -65,58 +72,140 @@ def append_to_excel(file_path, data):
     sheet.cell(row=max_rows + 1, column=8, value=data[6])
 
     sheet.cell(row=max_rows + 1, column=9, value=data[7])
-    sheet[f'I{target_row}'].fill = PatternFill(start_color=color_style[data[7].split('-')[0]],
-                                               end_color=color_style[data[7].split('-')[0]],
-                                               fill_type='solid')
+    sheet[f'I{target_row}'].fill = PatternFill(
+        start_color=color_style[data[7].split('-')[0]],
+        end_color=color_style[data[7].split('-')[0]],
+        fill_type='solid'
+    )
+
     try:
         workbook.save(file_path)
     except Exception as ex:
         st.error(f"Возникла ошибка при сохранении таблицы: {ex}")
+        return
 
     st.success(f"Видео добавлено в таблицу! Всего строк в таблице: {max_rows - 1}")
 
 
 def load_table_info(file_path):
-    if os.path.isfile(file_path):
-        try:
-            data = pd.read_excel(file_path)
-            st.dataframe(data[1:])  # Выводим таблицу на страницу
-        except Exception as ex:
-            st.error(f"Ошибка при загрузке файла: {ex}")
+    # Загружаем данные из Excel
+    workbook = load_workbook(file_path, data_only=True)
+    sheet = workbook.active
+
+    # Список для хранения данных
+    data = []
+
+    # Читаем строки из таблицы, начиная со 2-й строки (первая — заголовки)
+    for i, row in enumerate(sheet.iter_rows(min_row=3, max_row=sheet.max_row, min_col=1, max_col=8), start=1):
+        title = row[2].value  # 3-й столбец: название видео
+        url = row[1].value  # 4-й столбец: ссылка
+        ratio = row[7].value  # 8-й столбец: просмотры/подписчики
+        data.append({"Номер": i, "Название": title, "Ссылка": url, "Просмотры/Подписчики": ratio})
+
+    # Преобразуем список в DataFrame
+    df = pd.DataFrame(data)
+
+    # Выводим таблицу в Streamlit
+    st.write("### Таблица аналитики")
+    for index, row in df.iterrows():
+        # Создаём строку с колонками
+        cols = st.columns([1, 3, 3, 2, 1])
+
+        with cols[0]:
+            st.write(row["Номер"])  # Автоматически пронумерованная строка
+
+        with cols[1]:
+            st.write(row["Название"] if row["Название"] else "Нет названия")  # Название видео
+
+        with cols[2]:
+            # Добавляем кликабельную ссылку
+            if row["Ссылка"]:
+                st.markdown(f"[Смотреть видео]({row['Ссылка']})")
+            else:
+                st.write("Нет ссылки")
+
+        with cols[3]:
+            st.write(row["Просмотры/Подписчики"] if row["Просмотры/Подписчики"] else "Нет данных")
+
+        with cols[4]:
+            # Кнопка для удаления строки
+            if st.button(f"Удалить {row['Номер']}", key=f"delete_{row['Номер']}"):
+                try:
+                    delete_row(file_path, index + 2)
+                    st.query_params.clear()  # Очищаем параметры URL
+                    st.rerun()
+                except PermissionError:
+                    vote()
+
+
+# Функция для удаления строки из Excel
+def delete_row(file_path, row_number):
+    workbook = load_workbook(file_path)
+    sheet = workbook.active
+    # Удаляем строку
+    sheet.delete_rows(row_number)
+    # Сохраняем изменения
+    workbook.save(file_path)
+
+
+@st.dialog("Возникла ошибка")
+def vote():
+    st.write("Возможно, у вас открыл Excel файл. Закройте его и повторите попытку")
+    if st.button("Ок"):
+        st.rerun()
 
 
 def get_video_info(video_id):
-    #  snippet,statistics,contentDetails
-    r = get_service().videos().list(id=video_id, part='snippet, statistics, contentDetails').execute()
+    try:
+        # Получение данных о видео
+        r = get_service().videos().list(id=video_id, part='snippet, statistics, contentDetails').execute()
 
-    channelID = r['items'][0]['snippet']['channelId']
-    channelSubsCount = get_channel_subs_count(channelID)
+        channelID = r['items'][0]['snippet']['channelId']
+        channelSubsCount = get_channel_subs_count(channelID)
 
-    videoTitle = r['items'][0]['snippet']['title']
-    videoDatePublish = r['items'][0]['snippet']['publishedAt']
-    videoViewsCount = r['items'][0]['statistics']['viewCount']
+        # Получение названия видео
+        videoTitle = r['items'][0]['snippet'].get('title', 'Без названия')
+        if not videoTitle:  # Если название пустое или отсутствует
+            videoTitle = "Без названия"
 
-    videoDuration = r['items'][0]['contentDetails']['duration']
-    duration = videoDuration.replace("PT", "").replace("S", "")
-    duration_on_write = str(duration.split('M')[0] + ":" + duration.split('M')[1])
+        # Перевод названия видео на русский язык
+        try:
+            translated_title = translator.translate(videoTitle, src='auto', dest='ru').text
+        except Exception as e:
+            translated_title = videoTitle  # Если перевод не удался, оставляем оригинал
+            print(f"Ошибка при переводе: {e}")
 
-    urlPreview = r['items'][0]['snippet']['thumbnails']['medium']['url']
-    p = requests.get(urlPreview)
-    previewPath = f"previews\{video_id}.jpg"
-    out = open(previewPath, "wb")
-    out.write(p.content)
-    out.close()
+        videoDatePublish = r['items'][0]['snippet']['publishedAt']
+        videoViewsCount = r['items'][0]['statistics']['viewCount']
 
-    videos_data = [f"https://www.youtube.com/watch?v={video_id}",
-                   videoTitle,
-                   previewPath,
-                   videoViewsCount,
-                   channelSubsCount,
-                   duration_on_write,
-                   round(int(videoViewsCount) / int(channelSubsCount), 2),
-                   videoDatePublish.split('T')[0]]
+        videoDuration = r['items'][0]['contentDetails']['duration']
+        duration = videoDuration.replace("PT", "").replace("S", "")
+        duration_on_write = str(duration.split('M')[0] + ":" + duration.split('M')[1])
 
-    append_to_excel(file_path, videos_data)
+        urlPreview = r['items'][0]['snippet']['thumbnails']['medium']['url']
+        p = requests.get(urlPreview)
+        previewPath = f"previews\{video_id}.jpg"
+        with open(previewPath, "wb") as out:
+            out.write(p.content)
+
+        # Сохраняем перевод в таблицу
+        videos_data = [f"https://www.youtube.com/watch?v={video_id}",
+                       translated_title,  # Используем переведённое название
+                       previewPath,
+                       videoViewsCount,
+                       channelSubsCount,
+                       duration_on_write,
+                       round(int(videoViewsCount) / int(channelSubsCount), 2),
+                       videoDatePublish.split('T')[0]]
+
+        append_to_excel(file_path, videos_data)
+
+    except KeyError as e:
+        st.error(f"Ошибка: отсутствует ключ {e}. Возможно, видео недоступно.")
+    except IndexError:
+        pass
+    except Exception as e:
+        st.error(f"Возникла ошибка: {e}")
 
 
 def get_youtube_id(url):
@@ -131,6 +220,11 @@ def get_youtube_id(url):
 
 
 def main():
+    # Проверка авторизации
+    if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
+        st.error("Доступ запрещен. Пожалуйста, войдите в систему на главной странице.")
+        return
+
     st.page_link("main.py", label="На главную", icon="⬅️")
     st.title("АНАЛИТИКА—ХУИТИКА | Полноформатные видео")
 
@@ -151,7 +245,9 @@ def main():
     except Exception as ex:
         st.error(f"Возникла ошибка: {ex}")
 
-    load_table_info(file_path)
+    if os.path.isfile(file_path):
+        pass
+        load_table_info(file_path)
 
 
 if __name__ == "__main__":
